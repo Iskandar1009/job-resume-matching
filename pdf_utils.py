@@ -1,3 +1,4 @@
+# pdf_utils.py
 import pypdfium2
 
 def extract_text_from_pdf(path: str) -> str:

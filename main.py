@@ -1,55 +1,58 @@
+# app.py
 from fastapi import FastAPI, UploadFile
 from typing import List
-import tempfile, json, torch
-from pdf_utils import extract_text_from_pdf
+import tempfile, json
 from embeddings import EmbeddingModel
+from matching import score_pair
+from matching import normalize_scores
+from fastapi.responses import JSONResponse
 
 app = FastAPI(title="AI Resume Matcher")
 
-model = None 
-
+model = None
 
 def get_model():
     global model
     if model is None:
-        print("Loading model (one-time)...")
+        print("Loading Qwen3-Embedding-0.6B...")
         model = EmbeddingModel()
-        print("Model loaded!")
+        print("Model loaded.")
     return model
-
-
-def cosine_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
-    return (a @ b.T).item()
-
-
-def score_pair(resume_path: str, job_path: str) -> float:
-    resume_text = extract_text_from_pdf(resume_path)
-    job_text = extract_text_from_pdf(job_path)
-    if not resume_text or not job_text:
-        return 0.0
-    mdl = get_model()
-    emb_resume = mdl.encode([resume_text])
-    emb_job = mdl.encode([job_text])
-    sim = cosine_similarity(emb_resume, emb_job)
-    return round(sim * 100, 2)
-
 
 @app.post("/match/")
 async def match_resumes(jobs: List[UploadFile], resumes: List[UploadFile]):
+    mdl = get_model()
     results = {}
+
     for job in jobs:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as jf:
             jf.write(await job.read())
             job_path = jf.name
-        job_results = []
+
+        job_scores = []
         for resume in resumes:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as rf:
                 rf.write(await resume.read())
                 resume_path = rf.name
-            percent = score_pair(resume_path, job_path)
-            job_results.append({
+
+            res = score_pair(resume_path, job_path, mdl)
+            job_scores.append({
                 "resume": resume.filename,
-                "match_percent": percent
+                "match_percent": res["score"],
+                "section_scores": res["section_scores"],
+                "explanation": res["explanation"]
             })
-        results[job.filename] = job_results
-    return json.dumps(results, ensure_ascii=False, indent=2)
+
+        # normalize for better ranking evaluation
+        normalized = normalize_scores([r["match_percent"] for r in job_scores])
+        for i, val in enumerate(normalized):
+            job_scores[i]["normalized_match_percent"] = round(val, 2)
+
+        results[job.filename] = job_scores
+
+    return JSONResponse(content=results)
+
+
+
+
+
