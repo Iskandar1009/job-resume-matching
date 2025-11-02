@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Resume Matcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --accent:#6D5DFC;
+      --accent-weak:#A79CFF;
+      --ring:rgba(109,93,252,0.25);
+    }
+    html,body{font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial;}
+    .fade{opacity:0;transform:translateY(8px);transition:opacity .35s ease,transform .35s ease;}
+    .fade.show{opacity:1;transform:translateY(0);}
+    .dropzone{position:relative;border:1px dashed rgba(0,0,0,.12);background:#fff;border-radius:18px;padding:36px 18px;text-align:center;transition:border-color .25s ease,box-shadow .25s ease,transform .2s ease;overflow:hidden;}
+    .dropzone:hover{border-color:var(--accent-weak);box-shadow:0 6px 30px rgba(17,24,39,.06);transform:translateY(-1px);}
+    .dropzone:focus-within{border-color:var(--accent);box-shadow:0 0 0 6px var(--ring);}
+    .dropzone::before{content:"Нажмите, чтобы выбрать файлы";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:14px;color:#7b7b8d;pointer-events:none;transition:opacity .25s ease,color .25s ease;opacity:1;}
+    .dropzone.has-files::before{opacity:0;visibility:hidden;}
+    input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:2;}
+    .chip{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:#F6F7FB;color:#374151;font-size:13px;border:1px solid rgba(0,0,0,.06);}
+    .chip svg{width:16px;height:16px;opacity:.7}
+    .soft-card{border:1px solid rgba(0,0,0,.06);background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(17,24,39,.07);}
+    .btn-primary{background:var(--accent);color:#fff;border-radius:14px;padding:12px 16px;font-weight:600;transition:transform .15s ease,box-shadow .2s ease;background .2s ease;box-shadow:0 8px 30px rgba(109,93,252,.35);}
+    .btn-primary:hover{transform:translateY(-1px);box-shadow:0 12px 36px rgba(109,93,252,.45);}
+    .btn-primary:active{transform:translateY(0);box-shadow:0 6px 22px rgba(109,93,252,.35);}
+    .btn-ghost{background:#F6F7FB;color:#111827;border-radius:14px;padding:10px 14px;font-weight:600;transition:background .2s ease,transform .15s ease;border:1px solid rgba(0,0,0,.06)}
+    .btn-ghost:hover{background:#EEF0F8;transform:translateY(-1px);}
+    .progress{height:10px;width:100%;border-radius:999px;background:#F3F4F6;border:1px solid rgba(0,0,0,.06);overflow:hidden;}
+    .progress>span{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#9B8CFF);border-radius:999px;transition:width .6s cubic-bezier(.2,.8,.2,1);}
+    summary::-webkit-details-marker{display:none;} summary{list-style:none;}
+  </style>
+</head>
+
+<body class="bg-[#F4F5F8] min-h-screen">
+<header class="max-w-5xl mx-auto px-5 pt-8 pb-2">
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-2xl" style="background:linear-gradient(135deg,#6D5DFC,#9B8CFF)"></div>
+      <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900">AI Resume Matcher</h1>
+    </div>
+    <div class="hidden sm:flex items-center gap-3 text-sm text-gray-600">
+      <span class="hidden md:inline">MVP Version</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-5 py-6">
+  <section id="upload-screen" class="soft-card p-6 sm:p-8 fade show">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900">Загрузите файлы</h2>
+      <p class="text-gray-600 mt-2">Выберите несколько PDF-файлов резюме и вакансий. Нажмите «Сопоставить», чтобы увидеть результат.</p>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-6">
+      <div class="space-y-3">
+        <label class="text-sm font-semibold text-gray-800">Резюме (PDF)</label>
+        <div class="dropzone" id="resumes-dropzone">
+          <input id="resumes-input" type="file" multiple accept=".pdf">
+          <div id="resumes-list" class="mt-3 flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <label class="text-sm font-semibold text-gray-800">Вакансии (PDF)</label>
+        <div class="dropzone" id="jobs-dropzone">
+          <input id="jobs-input" type="file" multiple accept=".pdf">
+          <div id="jobs-list" class="mt-3 flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-7 flex items-center justify-between">
+      <div class="text-sm text-gray-500">Совет: называйте файлы осмысленно — это упростит проверку.</div>
+      <button id="match-btn" class="btn-primary">Сопоставить</button>
+    </div>
+    <div id="loading" class="hidden mt-6 text-center text-gray-600 font-medium">Идёт сопоставление... Пожалуйста, подождите.</div>
+  </section>
+
+  <section id="result-screen" class="soft-card p-6 sm:p-8 fade hidden">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900">Результаты сопоставления</h2>
+        <p class="text-gray-600 mt-1">Список вакансий и лучших совпадений резюме.</p>
+      </div>
+      <button id="back-btn" class="btn-ghost">Назад</button>
+    </div>
+    <div id="results-container" class="space-y-5"></div>
+  </section>
+</main>
+
+<footer class="max-w-5xl mx-auto px-5 pb-10 pt-2 text-center text-sm text-gray-500">
+  2025 IY Team · All rights reserved
+</footer>
+
+<script>
+  const uploadScreen=document.getElementById("upload-screen");
+  const resultScreen=document.getElementById("result-screen");
+  const resultsContainer=document.getElementById("results-container");
+  const resumesInput=document.getElementById("resumes-input");
+  const jobsInput=document.getElementById("jobs-input");
+  const resumesList=document.getElementById("resumes-list");
+  const jobsList=document.getElementById("jobs-list");
+  const resumesDropzone=document.getElementById("resumes-dropzone");
+  const jobsDropzone=document.getElementById("jobs-dropzone");
+  const loading=document.getElementById("loading");
+
+  const fileIcon=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/></svg>`;
+  function renderChips(inputEl,listEl,dropzone){
+    listEl.innerHTML="";
+    const files=Array.from(inputEl.files||[]);
+    if(files.length>0){dropzone.classList.add("has-files");}
+    else{dropzone.classList.remove("has-files");}
+    files.forEach(f=>{
+      const chip=document.createElement("span");
+      chip.className="chip";
+      chip.innerHTML=`${fileIcon}<span>${f.name}</span>`;
+      listEl.appendChild(chip);
+    });
+  }
+  resumesInput.addEventListener("change",()=>renderChips(resumesInput,resumesList,resumesDropzone));
+  jobsInput.addEventListener("change",()=>renderChips(jobsInput,jobsList,jobsDropzone));
+
+  document.getElementById("match-btn").addEventListener("click",async()=>{
+    if(!resumesInput.files.length || !jobsInput.files.length){
+      alert("Пожалуйста, выберите хотя бы один файл резюме и одну вакансию.");return;
+    }
+    const formData=new FormData();
+    for(const file of resumesInput.files) formData.append("resumes",file);
+    for(const file of jobsInput.files) formData.append("jobs",file);
+
+    loading.classList.remove("hidden");
+    try{
+      const resp=await fetch("/match",{
+        method:"POST",
+        body:formData
+      });
+      if(!resp.ok) throw new Error(`Ошибка: ${resp.status}`);
+      const data=await resp.json();
+      renderResults(data);
+      uploadScreen.classList.remove("show");
+      setTimeout(()=>{
+        uploadScreen.classList.add("hidden");
+        resultScreen.classList.remove("hidden");
+        setTimeout(()=>resultScreen.classList.add("show"),40);
+      },320);
+    }catch(err){
+      alert("Ошибка при сопоставлении: "+err.message);
+      console.error(err);
+    }finally{
+      loading.classList.add("hidden");
+    }
+  });
+
+  document.getElementById("back-btn").addEventListener("click",()=>{
+    resultScreen.classList.remove("show");
+    setTimeout(()=>{
+      resultScreen.classList.add("hidden");
+      uploadScreen.classList.remove("hidden");
+      setTimeout(()=>uploadScreen.classList.add("show"),40);
+    },300);
+  });
+
+  function renderResults(data){
+    resultsContainer.innerHTML="";
+    Object.entries(data).forEach(([job,resumes])=>{
+      const card=document.createElement("details");
+      card.className="border border-gray-200 rounded-2xl bg-white p-5";
+      card.open=false;
+      const summary=document.createElement("summary");
+      summary.className="cursor-pointer select-none outline-none flex items-center justify-between gap-4";
+      summary.innerHTML=`<div class="text-base sm:text-lg font-semibold text-gray-900">${job}</div>
+      <svg class="w-5 h-5 text-gray-500 transition-transform duration-200 details-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>`;
+      card.appendChild(summary);
+
+      const inner=document.createElement("div");
+      inner.className="mt-4 space-y-3";
+      resumes.sort((a,b)=>b.match_percent-a.match_percent).forEach((r,idx)=>{
+        const {section_scores,explanation}=r;
+        const row=document.createElement("div");
+        row.className="rounded-xl border border-gray-200 p-4 bg-[#FBFBFD]";
+        row.innerHTML=`
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm sm:text-base text-gray-800">
+              <span class="font-medium text-gray-900">${idx+1}. ${r.resume}</span>
+            </div>
+            <div class="text-sm font-semibold text-gray-900">${r.match_percent.toFixed(1)}%</div>
+          </div>
+          <div class="progress mb-3"><span style="width:${r.match_percent}%"></span></div>
+          <div class="text-xs text-gray-700 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div><b>Должность:</b> ${section_scores.title.toFixed(1)}%</div>
+            <div><b>Навыки:</b> ${section_scores.skills.toFixed(1)}%</div>
+            <div><b>Опыт:</b> ${section_scores.experience.toFixed(1)}%</div>
+            <div><b>Образование:</b> ${section_scores.education.toFixed(1)}%</div>
+          </div>
+          <p class="text-xs text-gray-500 mt-3 leading-snug">${explanation}</p>
+        `;
+        inner.appendChild(row);
+      });
+      card.appendChild(inner);
+      card.addEventListener("toggle",()=>{
+        const arrow=card.querySelector(".details-arrow");
+        if(arrow)arrow.style.transform=card.open?"rotate(0deg)":"rotate(-90deg)";
+      });
+      resultsContainer.appendChild(card);
+    });
+  }
+</script>
+</body>
+</html>

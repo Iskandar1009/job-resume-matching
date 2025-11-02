@@ -1,0 +1,9 @@
+version: "3.9"
+
+services:
+  job-matcher:
+    build: .
+    container_name: job_matcher
+    ports:
+      - "8080:8000"
+    restart: unless-stopped
